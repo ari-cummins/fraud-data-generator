@@ -1,4 +1,4 @@
-# Fraud Data Generator
+
 
 Synthetic contact-centre fraud dummy-data generator (Python/pandas). Built as a learning project.
 
