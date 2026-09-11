@@ -1,12 +1,5 @@
 from datetime import datetime, timedelta
 
-import os
-import random
-from collections import defaultdict
-from datetime import datetime, timedelta
-
-import pandas as pd
-
 SEED = 42
 OUTPUT_DIR = "output"
 
@@ -53,5 +46,3 @@ SHIFT_WINDOWS = {"day": (7, 15), "evening": (15, 23), "night": (23, 7)}
 
 TOTAL_DAYS = 365 * YEARS
 DATE_RANGE = [START_DATE + timedelta(days=i) for i in range(TOTAL_DAYS)]
-
-random.seed(SEED)
