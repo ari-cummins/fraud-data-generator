@@ -22,3 +22,4 @@ packages = ["src/fraud_generator"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+markers = ["slow: takes minutes; run explicitly with -m slow"]
