@@ -2,8 +2,6 @@ import os
 
 import pandas as pd
 
-from fraud_generator import config
-
 BANNED = ("fraud", "label", "scenario", "suspicious", "anomal", "is_bad", "risk_score")
 
 
@@ -37,16 +35,16 @@ def check_no_labels(tables):
             assert not col.startswith("_"), f"internal column exported: {name}.{col}"
 
 
-def write_tables(tables, output_dir=None):
-    output_dir = config.OUTPUT_DIR if output_dir is None else output_dir
+def write_tables(tables, output_dir):
+    """Write each table to <output_dir>/<name>.csv."""
     os.makedirs(output_dir, exist_ok=True)
     for name, df in tables.items():
         df.to_csv(os.path.join(output_dir, f"{name}.csv"), index=False)
 
 
-def print_summary(tables, output_dir=None):
-    output_dir = config.OUTPUT_DIR if output_dir is None else output_dir
-    print(f"Written to {output_dir}/  — no fraud labels present\n")
+def print_summary(tables, cfg):
+    """Print row/column counts and the headline base rates."""
+    print(f"Written to {cfg.output_dir}/  — no fraud labels present\n")
     for name, df in tables.items():
         print(f"  {name:<18} {len(df):>8,} rows  x {len(df.columns):>2} cols")
 
@@ -54,8 +52,9 @@ def print_summary(tables, output_dir=None):
     access = tables["crm_access"]
     auth = tables["auth_events"]
     refunds = txns["transaction_type"].isin(["refund", "fee_waiver"])
+    date_range = cfg.date_range
 
-    print(f"\n  Period            {config.DATE_RANGE[0].date()} to {config.DATE_RANGE[-1].date()}")
+    print(f"\n  Period            {date_range[0].date()} to {date_range[-1].date()}")
     print(f"  Refunds/waivers   {refunds.sum():,} ({refunds.mean():.1%} of transactions)")
     print(f"  Access w/o contact {access['contact_id'].isna().sum():,} "
           f"({access['contact_id'].isna().mean():.1%} of lookups)")
