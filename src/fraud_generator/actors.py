@@ -26,6 +26,7 @@ class CustomerBase:
 
 
 def build_workforce():
+    cfg = config.DEFAULT
     agents = []
     for i in range(config.NUM_AGENTS):
         hire = config.START_DATE - timedelta(days=random.randint(30, 365 * 9))
@@ -83,13 +84,14 @@ def build_workforce():
 
 
 def build_customers():
+    cfg = config.DEFAULT
     customers = []
     for i in range(config.NUM_CUSTOMERS):
         line, suburb, state, postcode = helpers.street_address()
         customers.append({
             "customer_id": helpers.seq_id("CUS", i + 1),
             "full_name": helpers.full_name(),
-            "date_of_birth": helpers.date_of_birth(),
+            "date_of_birth": helpers.date_of_birth(cfg),
             "residential_address": line,
             "suburb": suburb,
             "state": state,

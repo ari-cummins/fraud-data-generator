@@ -8,6 +8,7 @@ from fraud_generator.builders import Dataset
 
 def generate(seed=None):
     """Generate one complete dataset. Returns (data, workforce, customers)."""
+    cfg = config.DEFAULT
     random.seed(config.SEED if seed is None else seed)
 
     workforce = build_workforce()
@@ -20,7 +21,7 @@ def generate(seed=None):
         roster = workforce.active_on(day)
         if not roster:
             continue
-        trend = helpers.year_weight(day_index)
+        trend = helpers.year_weight(day_index, cfg)
 
         # ---------------------------------------------------------------- ordinary
         for _ in range(volume):
@@ -29,7 +30,7 @@ def generate(seed=None):
 
             if agent_assisted:
                 agent = random.choice(roster)
-                ts = helpers.stamp(day, shift=agent["shift_pattern"])
+                ts = helpers.stamp(day, cfg, shift=agent["shift_pattern"])
                 contact_id = data.add_contact(ts, "agent_assisted", customer_id, agent["agent_id"])
 
                 # the lookups that go with the call — pretext satisfied. An agent
@@ -70,7 +71,7 @@ def generate(seed=None):
                     data.add_profile_change(ts, customer_id, fields, agent["agent_id"], contact_id, "agent_assisted")
 
             else:
-                ts = helpers.stamp(day, hour=random.randint(6, 23))
+                ts = helpers.stamp(day, cfg, hour=random.randint(6, 23))
                 ip = helpers.ip_address()
                 ua = random.choice(pools.USER_AGENTS)
 
@@ -101,7 +102,7 @@ def generate(seed=None):
         # complaint handling. These are why "no contact_id" is not itself damning.
         for _ in range(int(volume * config.P_LEGIT_NO_CONTACT_ACCESS)):
             agent = random.choice(roster)
-            data.add_access(helpers.stamp(day, shift=agent["shift_pattern"]), agent["agent_id"],
+            data.add_access(helpers.stamp(day, cfg, shift=agent["shift_pattern"]), agent["agent_id"],
                     random.choice(customers.ids), None, ["profile"])
 
         # ------------------------------------------------------- driven by propensity
@@ -116,15 +117,15 @@ def generate(seed=None):
                 target = random.choice(customers.protected_ids) if (customers.protected_ids and random.random() < 0.35) \
                     else random.choice(customers.ids)
                 if random.random() < config.P_LOCATE_AFTER_HOURS:
-                    hours = [h for h in range(24) if not helpers.in_shift(h, agent["shift_pattern"])]
-                    ts = helpers.stamp(day, hour=random.choice(hours))
+                    hours = [h for h in range(24) if not helpers.in_shift(h, agent["shift_pattern"], cfg)]
+                    ts = helpers.stamp(day, cfg, hour=random.choice(hours))
                 else:
-                    ts = helpers.stamp(day, shift=agent["shift_pattern"])
+                    ts = helpers.stamp(day, cfg, shift=agent["shift_pattern"])
                 data.add_access(ts, aid, target, None, ["contact", "linked", "profile"])
 
             # (B) Excessive lookups — a burst of unrelated records in one hour.
             if random.random() < (config.VELOCITY_BURSTS_PER_YEAR * trend) / 365:
-                base = helpers.stamp(day, shift=agent["shift_pattern"])
+                base = helpers.stamp(day, cfg, shift=agent["shift_pattern"])
                 for _ in range(random.randint(*config.VELOCITY_BURST_SIZE)):
                     data.add_access(base + timedelta(minutes=random.randint(0, 55)), aid,
                             random.choice(customers.ids), None, ["contact", "linked"])
@@ -133,7 +134,7 @@ def generate(seed=None):
             #     never paid anything. Built by the same transaction function.
             if random.random() < (config.BENEFIT_FRAUD_PER_MONTH * trend) / 30:
                 target = random.choice([c for c in customers.ids if not data.purchase_history[c]] or customers.ids)
-                ts = helpers.stamp(day, shift=agent["shift_pattern"])
+                ts = helpers.stamp(day, cfg, shift=agent["shift_pattern"])
                 contact_id = data.add_contact(ts, "agent_assisted", target, aid)
                 data.add_access(ts, aid, target, contact_id, ["financial", "profile"])
                 data.add_transaction(ts, target, random.choice(["refund", "fee_waiver"]),
@@ -143,7 +144,7 @@ def generate(seed=None):
             #     customer record in a single contact, including the ID document.
             if random.random() < (config.IDENTITY_FRAUD_PER_MONTH * trend) / 30:
                 target = random.choice(customers.ids)
-                ts = helpers.stamp(day, shift=agent["shift_pattern"])
+                ts = helpers.stamp(day, cfg, shift=agent["shift_pattern"])
                 contact_id = data.add_contact(ts, "agent_assisted", target, aid)
                 data.add_access(ts, aid, target, contact_id, ["identity", "contact", "profile"])
                 fields = random.sample(["residential_address", "mobile_phone", "email",
@@ -157,7 +158,7 @@ def generate(seed=None):
                 continue
             if random.random() < 0.04 * trend:
                 shared = random.sample(customers.ids, random.randint(2, 4))
-                base = helpers.stamp(day, shift=workforce.by_id[a1]["shift_pattern"])
+                base = helpers.stamp(day, cfg, shift=workforce.by_id[a1]["shift_pattern"])
                 for cust in shared:
                     data.add_access(base, a1, cust, None, ["contact", "linked"])
                     data.add_access(base + timedelta(minutes=random.randint(5, 180)), a2, cust, None, ["contact", "linked"])
@@ -166,7 +167,7 @@ def generate(seed=None):
         #     IP, then a success, then a valuable change. Same builders as above.
         if random.random() < (config.ACCOUNT_TAKEOVERS_PER_MONTH * trend) / 30:
             victim = random.choice(customers.ids)
-            ts = helpers.stamp(day, hour=random.choice([0, 1, 2, 3, 4, 22, 23]))
+            ts = helpers.stamp(day, cfg, hour=random.choice([0, 1, 2, 3, 4, 22, 23]))
             attacker_ip = helpers.ip_address(residential=False)
             for k in range(random.randint(4, 9)):
                 data.add_auth_event(ts - timedelta(minutes=12 - k), victim, "failed_login", attacker_ip, "Chrome/Linux")
@@ -186,7 +187,7 @@ def generate(seed=None):
             day = agent["_termination_dt"] + timedelta(days=random.randint(2, 70))
             if day > config.DATE_RANGE[-1]:
                 continue
-            data.add_access(helpers.stamp(day, hour=random.randint(19, 23)), agent["agent_id"],
+            data.add_access(helpers.stamp(day, cfg, hour=random.randint(19, 23)), agent["agent_id"],
                     random.choice(customers.ids), None, ["contact", "linked"])
 
     return data, workforce, customers

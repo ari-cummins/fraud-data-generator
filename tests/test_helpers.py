@@ -4,11 +4,13 @@ import re
 from fraud_generator import config, helpers, pools
 from datetime import datetime
 
+@pytest.fixture
+def cfg():
+    return config.DEFAULT
 
 def test_seq_id_pads_to_eight_digits():
     assert helpers.seq_id("CUS", 1) == "CUS-00000001"
     assert helpers.seq_id("AGT", 20) == "AGT-00000020"
-
 
 @pytest.mark.parametrize(
     "hour, shift, expected",
@@ -25,24 +27,24 @@ def test_seq_id_pads_to_eight_digits():
         (12, "night", False),
     ],
 )
-def test_in_shift(hour, shift, expected):
-    assert helpers.in_shift(hour, shift) is expected
+def test_in_shift(hour, shift, expected, cfg):
+    assert helpers.in_shift(hour, shift, cfg) is expected
 
 
-def test_shift_hour_always_lands_inside_the_window():
+def test_shift_hour_always_lands_inside_the_window(cfg):
     for _ in range(200):
-        hour = helpers.shift_hour("night")
-        assert helpers.in_shift(hour, "night")
+        hour = helpers.shift_hour("night", cfg)
+        assert helpers.in_shift(hour, "night", cfg)
 
 def test_mobile_number():
     for _ in range(200):
         number = helpers.mobile_number()
         assert re.fullmatch(r"04\d{2} \d{3} \d{3}", number)
 
-def test_date_of_birth_in_plausible_range():
+def test_date_of_birth_in_plausible_range(cfg):
     for _ in range(200):
-        birthdate = datetime.fromisoformat(helpers.date_of_birth())
-        delta = config.START_DATE - birthdate
+        birthdate = datetime.fromisoformat(helpers.date_of_birth(cfg))
+        delta = cfg.start_date - birthdate
         assert 18 * 365 <= delta.days <= 88 * 365
 
 def test_street_address():
@@ -51,8 +53,8 @@ def test_street_address():
         assert len(address) == 4
         assert address[1:] in pools.SUBURBS
 
-def test_year_weight_steps_at_year_boundaries():
-    assert helpers.year_weight(0) == 1.0
-    assert helpers.year_weight(364) == 1.0          # still year 0
-    assert helpers.year_weight(365) == pytest.approx(1.15)
-    assert helpers.year_weight(800) == pytest.approx(1.15 ** 2)
+def test_year_weight_steps_at_year_boundaries(cfg):
+    assert helpers.year_weight(0, cfg) == 1.0
+    assert helpers.year_weight(364, cfg) == 1.0          # still year 0
+    assert helpers.year_weight(365, cfg) == pytest.approx(1.15)
+    assert helpers.year_weight(800, cfg) == pytest.approx(1.15 ** 2)

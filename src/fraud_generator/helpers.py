@@ -1,7 +1,7 @@
 import random
 from datetime import timedelta
 
-from fraud_generator import config, pools
+from fraud_generator import pools
 
 def full_name():
     return f"{random.choice(pools.FIRST_NAMES)} {random.choice(pools.LAST_NAMES)}"
@@ -16,9 +16,9 @@ def mobile_number():
     return f"04{random.randint(10, 99)} {random.randint(100, 999)} {random.randint(100, 999)}"
 
 
-def date_of_birth():
+def date_of_birth(cfg):
     days = random.randint(18 * 365, 88 * 365)
-    return (config.START_DATE - timedelta(days=days)).date().isoformat()
+    return (cfg.start_date - timedelta(days=days)).date().isoformat()
 
 
 def ip_address(residential=True):
@@ -31,26 +31,26 @@ def seq_id(prefix, n):
     return f"{prefix}-{n:08d}"
 
 
-def in_shift(hour, shift):
+def in_shift(hour, shift, cfg):
     """Is this hour inside the agent's rostered window?"""
-    start, end = config.SHIFT_WINDOWS[shift]
+    start, end = cfg.shift_windows[shift]
     if start < end:
         return start <= hour < end
     return hour >= start or hour < end  # night shift wraps midnight
 
 
-def shift_hour(shift):
+def shift_hour(shift, cfg):
     """Draw an hour from inside a rostered shift window."""
-    start, end = config.SHIFT_WINDOWS[shift]
+    start, end = cfg.shift_windows[shift]
     hours = list(range(start, end)) if start < end else list(range(start, 24)) + list(range(0, end))
     return random.choice(hours)
 
 
-def stamp(day, hour=None, shift="day"):
-    hour = shift_hour(shift) if hour is None else hour
+def stamp(day, cfg, hour=None, shift="day"):
+    hour = shift_hour(shift, cfg) if hour is None else hour
     return day.replace(hour=hour, minute=random.randint(0, 59), second=random.randint(0, 59))
 
 
-def year_weight(day_index):
+def year_weight(day_index, cfg):
     """Offending grows year on year; returns a multiplier for that day's rate."""
-    return (1 + config.FRAUD_TREND_YOY) ** (day_index // 365)
+    return (1 + cfg.fraud_trend_yoy) ** (day_index // 365)
