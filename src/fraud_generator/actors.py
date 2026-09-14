@@ -2,7 +2,7 @@ import random
 from dataclasses import dataclass
 from datetime import timedelta
 
-from fraud_generator import config, helpers, pools
+from fraud_generator import helpers, pools
 
 
 @dataclass
@@ -25,17 +25,16 @@ class CustomerBase:
     protected_ids: list
 
 
-def build_workforce():
-    cfg = config.DEFAULT
+def build_workforce(cfg):
     agents = []
-    for i in range(config.NUM_AGENTS):
-        hire = config.START_DATE - timedelta(days=random.randint(30, 365 * 9))
+    for i in range(cfg.num_agents):
+        hire = cfg.start_date - timedelta(days=random.randint(30, 365 * 9))
         shift = random.choices(["day", "evening", "night"], weights=[0.62, 0.28, 0.10])[0]
-        leaves = random.random() < config.P_AGENT_TERMINATED
+        leaves = random.random() < cfg.p_agent_terminated
         termination = None
         if leaves:
             # terminate part-way through the window so post-departure activity is visible
-            termination = config.START_DATE + timedelta(days=random.randint(120, config.TOTAL_DAYS - 60))
+            termination = cfg.start_date + timedelta(days=random.randint(120, cfg.total_days - 60))
 
         agents.append({
             "agent_id": helpers.seq_id("AGT", i + 1),
@@ -53,11 +52,11 @@ def build_workforce():
         })
 
     # Assign the hidden propensity. Seniority is a mild risk factor (broader access).
-    n_bad = max(3, int(config.NUM_AGENTS * config.P_AGENT_DISHONEST))
+    n_bad = max(3, int(cfg.num_agents * cfg.p_agent_dishonest))
     weights = [3 if a["access_level"] in ("senior", "admin") else 1 for a in agents]
     dishonest = set()
     while len(dishonest) < n_bad:
-        dishonest.add(random.choices(range(config.NUM_AGENTS), weights=weights)[0])
+        dishonest.add(random.choices(range(cfg.num_agents), weights=weights)[0])
     for i in dishonest:
         agents[i]["_dishonest"] = True
 
@@ -65,7 +64,7 @@ def build_workforce():
     # the post-termination pattern exists to be found.
     leavers = [i for i in dishonest if agents[i]["_termination_dt"] is not None]
     for i in list(dishonest)[:max(0, 2 - len(leavers))]:
-        t = config.START_DATE + timedelta(days=random.randint(150, config.TOTAL_DAYS - 90))
+        t = cfg.start_date + timedelta(days=random.randint(150, cfg.total_days - 90))
         agents[i]["_termination_dt"] = t
         agents[i]["termination_date"] = t.date().isoformat()
 
@@ -83,10 +82,9 @@ def build_workforce():
     return Workforce(agents, bad_ids, collusion_pairs, agent_by_id)
 
 
-def build_customers():
-    cfg = config.DEFAULT
+def build_customers(cfg):
     customers = []
-    for i in range(config.NUM_CUSTOMERS):
+    for i in range(cfg.num_customers):
         line, suburb, state, postcode = helpers.street_address()
         customers.append({
             "customer_id": helpers.seq_id("CUS", i + 1),
@@ -98,13 +96,13 @@ def build_customers():
             "postcode": postcode,
             "mobile_phone": helpers.mobile_number(),
             "email": f"{random.choice(pools.FIRST_NAMES).lower()}.{random.choice(pools.LAST_NAMES).lower().replace(chr(39),'')}{random.randint(1,999)}@example.com",
-            "customer_since": (config.START_DATE - timedelta(days=random.randint(200, 365 * 12))).date().isoformat(),
+            "customer_since": (cfg.start_date - timedelta(days=random.randint(200, 365 * 12))).date().isoformat(),
             "protected_person": random.random() < 0.012,  # court order / safety concern — a real business attribute
             "linked_customer_id": None,
         })
 
     # ~5% of customers share a household or joint registration
-    for c in random.sample(customers, int(config.NUM_CUSTOMERS * 0.05)):
+    for c in random.sample(customers, int(cfg.num_customers * 0.05)):
         other = random.choice(customers)
         if other["customer_id"] != c["customer_id"]:
             c["linked_customer_id"] = other["customer_id"]

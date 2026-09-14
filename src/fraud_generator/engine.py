@@ -11,8 +11,8 @@ def generate(seed=None):
     cfg = config.DEFAULT
     random.seed(config.SEED if seed is None else seed)
 
-    workforce = build_workforce()
-    customers = build_customers()
+    workforce = build_workforce(cfg)
+    customers = build_customers(cfg)
     data = Dataset()
 
     for day_index, day in enumerate(config.DATE_RANGE):
