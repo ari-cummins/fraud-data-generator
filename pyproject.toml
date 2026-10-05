@@ -1,11 +1,14 @@
 [project]
 name = "fraud-generator"
-version = "0.1.0"
+version = "0.2.0"
 description = "Synthetic contact-centre fraud data generator"
 requires-python = ">=3.11"
 dependencies = [
     "pandas>=2.0",
 ]
+
+[project.scripts]
+fraud-generate = "fraud_generator.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -22,4 +25,3 @@ packages = ["src/fraud_generator"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
-markers = ["slow: takes minutes; run explicitly with -m slow"]
