@@ -1,18 +1,34 @@
+"""Agents and customers.
+
+Agents carry two hidden fields, `_dishonest` and `_termination_dt`, prefixed
+with underscores and stripped before export. Seniority is a mild risk factor
+for offending, since broader access enables more; at least two offenders also
+leave part-way through the window, which guarantees the post-termination
+pattern exists to be found.
+"""
+
+from __future__ import annotations
+
 import random
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 
-from fraud_generator import helpers, pools
+from fraud_generator import config, helpers, pools
+
+Agent = dict[str, object]
+Customer = dict[str, object]
 
 
 @dataclass
 class Workforce:
-    agents: list
-    dishonest_ids: list
-    collusion_pairs: list
-    by_id: dict
+    """The agent population, plus the lookups the engine needs over it."""
 
-    def active_on(self, day):
+    agents: list[Agent]
+    dishonest_ids: list[str]
+    collusion_pairs: list[tuple[str, str]]
+    by_id: dict[str, Agent]
+
+    def active_on(self, day: datetime) -> list[Agent]:
         """Agents employed on this date. Used for legitimate rostering only."""
         return [a for a in self.agents
                 if a["_termination_dt"] is None or a["_termination_dt"] > day]
@@ -20,20 +36,22 @@ class Workforce:
 
 @dataclass
 class CustomerBase:
-    customers: list
-    ids: list
-    protected_ids: list
+    """The customer population, plus the id lists the engine samples from."""
+
+    customers: list[Customer]
+    ids: list[str]
+    protected_ids: list[str]
 
 
-def build_workforce(cfg):
-    agents = []
+def build_workforce(cfg: config.Config) -> Workforce:
+    agents: list[Agent] = []
     for i in range(cfg.num_agents):
         hire = cfg.start_date - timedelta(days=random.randint(30, 365 * 9))
         shift = random.choices(["day", "evening", "night"], weights=[0.62, 0.28, 0.10])[0]
         leaves = random.random() < cfg.p_agent_terminated
         termination = None
         if leaves:
-            # terminate part-way through the window so post-departure activity is visible
+            # Terminate part-way through the window so post-departure activity is visible.
             termination = cfg.start_date + timedelta(days=random.randint(120, cfg.total_days - 60))
 
         agents.append({
@@ -52,9 +70,14 @@ def build_workforce(cfg):
         })
 
     # Assign the hidden propensity. Seniority is a mild risk factor (broader access).
-    n_bad = max(3, int(cfg.num_agents * cfg.p_agent_dishonest))
+    #
+    # Floor of 4, not 3: the collusion block below needs four offenders to form
+    # two pairs. A floor of 3 made that guard unsatisfiable at any config where
+    # num_agents * p_agent_dishonest < 4, which silently produced datasets with
+    # no collusion in them at all.
+    n_bad = max(4, int(cfg.num_agents * cfg.p_agent_dishonest))
     weights = [3 if a["access_level"] in ("senior", "admin") else 1 for a in agents]
-    dishonest = set()
+    dishonest: set[int] = set()
     while len(dishonest) < n_bad:
         dishonest.add(random.choices(range(cfg.num_agents), weights=weights)[0])
     for i in dishonest:
@@ -68,10 +91,10 @@ def build_workforce(cfg):
         agents[i]["_termination_dt"] = t
         agents[i]["termination_date"] = t.date().isoformat()
 
-    # Two pairs of dishonest agents work together — this is what makes the collusion
-    # rule findable. They will share an unusual number of no-contact lookups.
+    # Two pairs of dishonest agents work together -- this is what makes the
+    # collusion rule findable. They share an unusual number of no-contact lookups.
     bad_ids = [agents[i]["agent_id"] for i in sorted(dishonest)]
-    collusion_pairs = []
+    collusion_pairs: list[tuple[str, str]] = []
     if len(bad_ids) >= 4:
         shuffled = bad_ids[:]
         random.shuffle(shuffled)
@@ -82,8 +105,8 @@ def build_workforce(cfg):
     return Workforce(agents, bad_ids, collusion_pairs, agent_by_id)
 
 
-def build_customers(cfg):
-    customers = []
+def build_customers(cfg: config.Config) -> CustomerBase:
+    customers: list[Customer] = []
     for i in range(cfg.num_customers):
         line, suburb, state, postcode = helpers.street_address()
         customers.append({
@@ -97,11 +120,13 @@ def build_customers(cfg):
             "mobile_phone": helpers.mobile_number(),
             "email": f"{random.choice(pools.FIRST_NAMES).lower()}.{random.choice(pools.LAST_NAMES).lower().replace(chr(39),'')}{random.randint(1,999)}@example.com",
             "customer_since": (cfg.start_date - timedelta(days=random.randint(200, 365 * 12))).date().isoformat(),
-            "protected_person": random.random() < 0.012,  # court order / safety concern — a real business attribute
+            # A real business attribute: court order or safety concern. Not a
+            # fraud flag -- but Rule 1 weights lookups against these customers.
+            "protected_person": random.random() < 0.012,
             "linked_customer_id": None,
         })
 
-    # ~5% of customers share a household or joint registration
+    # ~5% of customers share a household or joint registration.
     for c in random.sample(customers, int(cfg.num_customers * 0.05)):
         other = random.choice(customers)
         if other["customer_id"] != c["customer_id"]:
