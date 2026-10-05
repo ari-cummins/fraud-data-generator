@@ -4,10 +4,6 @@ import re
 from fraud_generator import config, helpers, pools
 from datetime import datetime
 
-@pytest.fixture
-def cfg():
-    return config.DEFAULT
-
 def test_seq_id_pads_to_eight_digits():
     assert helpers.seq_id("CUS", 1) == "CUS-00000001"
     assert helpers.seq_id("AGT", 20) == "AGT-00000020"
