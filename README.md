@@ -1,5 +1,7 @@
 # Contact Centre Fraud — Synthetic Data Generator
 
+[![tests](https://github.com/ari-cummins/fraud-data-generator/actions/workflows/tests.yml/badge.svg)](https://github.com/ari-cummins/fraud-data-generator/actions/workflows/tests.yml)
+
 Generates seven relational tables of contact-centre activity for a fictional
 Australian government service agency, with fraud planted in them.
 
@@ -102,7 +104,7 @@ src/fraud_generator/
 pytest
 ```
 
-96 tests, about 18 seconds. Four kinds:
+96 tests, about 18 seconds, run in CI on Python 3.11 through 3.14. Four kinds:
 
 - **Unit** — pure helpers, `Dataset` state, `Config` validation.
 - **Structural** — referential integrity, no activity before an agent's hire date.

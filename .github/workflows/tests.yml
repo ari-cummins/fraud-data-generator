@@ -1,0 +1,75 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch cancels the previous run rather than queueing
+# behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest (python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Don't cancel the other versions when one fails -- knowing it breaks on
+      # 3.11 only, or on every version, is the useful signal.
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install the package and its dev extras
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Run the test suite
+        run: pytest
+
+      - name: Check the console script actually works
+        # pytest calls cli.main() directly, which passes even if the entry
+        # point in pyproject.toml is wrong. This runs the installed command.
+        run: fraud-generate --customers 100 --years 1 --no-write --quiet
+
+  build:
+    name: build wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build
+        run: uv build
+
+      - name: Install the built wheel into a clean environment and import it
+        # Catches packaging mistakes the editable install hides -- a module
+        # left out of the wheel imports fine from the source tree.
+        run: |
+          uv venv /tmp/check
+          uv pip install --python /tmp/check/bin/python dist/*.whl
+          /tmp/check/bin/python -c "import fraud_generator, fraud_generator.cli, fraud_generator.detection; print(fraud_generator.__version__)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
