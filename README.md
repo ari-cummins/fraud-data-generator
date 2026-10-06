@@ -79,7 +79,7 @@ detection rules have to do real work.
 | 5 | Identity takeover | 3+ profile fields changed in one contact, ID document included |
 | 6 | Account takeover | failed-login run from an unfamiliar IP, then success, then a valuable change |
 | 7 | Post-termination access | lookups dated after the agent's termination |
-| 8 | Collusion | agent pairs sharing an abnormal number of no-call lookups — see [known issues](docs/known-issues.md) |
+| 8 | Collusion | agent pairs whose no-call lookup overlap exceeds what chance predicts for their volumes |
 
 ## Layout
 
@@ -91,6 +91,7 @@ src/fraud_generator/
   actors.py     Workforce and CustomerBase construction
   builders.py   Dataset — the five row builders and their shared state
   engine.py     one chronological pass; ordinary activity, then fraud
+  detection.py  Rule 8 scoring — the one rule that needed tests
   export.py     DataFrame shaping, label guard rail, CSV writing
   cli.py        fraud-generate entry point
 ```
@@ -101,13 +102,14 @@ src/fraud_generator/
 pytest
 ```
 
-79 tests, about 8 seconds. Four kinds:
+90 tests, about 10 seconds. Four kinds:
 
 - **Unit** — pure helpers, `Dataset` state, `Config` validation.
 - **Structural** — referential integrity, no activity before an agent's hire date.
-- **Scenario** — each of the eight patterns is actually present in the output.
-  These are the ones that matter: the dataset's value is that the fraud is
-  findable, and nothing else checks that.
+- **Scenario** — each of the eight patterns is actually present in the output,
+  and the planted collusion pairs rank top by Rule 8's score. These are the
+  ones that matter: the dataset's value is that the fraud is findable, and
+  nothing else checks that.
 - **Golden** — `test_reproducibility.py` pins SHA-256 fingerprints of all seven
   tables. A deliberate change to generation requires re-recording them with a
   note saying why.

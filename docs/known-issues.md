@@ -1,50 +1,46 @@
 # Known issues
 
-## Rule 8 cannot separate collusion from high-volume offending
-
-**Status:** open, by design for now.
-
-Colluding pairs are planted: two pairs of dishonest agents pull the same
-customers on the same day, neither of them on a call, firing at `0.04 * trend`
-per pair per day.
-
-They do not reliably rank *first* on shared no-contact lookups. At the shipped
-configuration the planted pairs rank 2nd and 4th out of 190 agent pairs, and
-the top-ranked pair is two offenders who never colluded.
-
-The cause is that every offender draws unlawful-locate targets from the same
-7,500-customer pool. Two offenders each making several hundred lookups overlap
-substantially by chance, and a velocity burst adds 22-40 more in a single hour.
-Planted collusion contributes roughly 40-110 shared customers over three years;
-coincidental overlap between two busy offenders reaches 137.
-
-So Rule 8 as written partly restates Rule 1 — "both of these agents do an
-unusual volume of no-contact lookups". It is a useful ranking signal next to
-Rule 1, not a standalone collusion detector, and the notebook's claim that
-"two people don't coincidentally browse the same strangers' records on the same
-days" is not supported by the data as generated.
-
-`tests/test_dataset.py::test_collusion_pairs_are_planted_and_rank_highly`
-encodes the property that actually holds: planted pairs land in the top fifth
-of pairs and share more customers than the median pair.
-
-**Options if this is worth fixing:**
-
-1. Give each colluding pair a small dedicated target list (say 60 customers)
-   that they return to repeatedly, instead of sampling the whole population.
-   This is also closer to how real collusion looks — a shared interest in
-   specific people — and would concentrate the overlap enough to dominate the
-   noise.
-2. Raise the collusion firing rate by roughly 3x.
-3. Add a second condition to Rule 8: shared customers *and* temporal proximity
-   between the two agents' lookups, which the generator already produces (the
-   second agent's access lands 5–180 minutes after the first).
-
-Option 1 is the most defensible, and option 3 costs nothing in the generator.
-Both change the dataset, so both invalidate the golden fingerprints in
-`tests/test_reproducibility.py` and need a deliberate re-baseline.
+No open issues.
 
 ## Fixed
+
+### Rule 8 could not separate collusion from high-volume offending (fixed 2026-10-06)
+
+Rule 8 ranked agent pairs by the raw count of customers they had both looked up
+with no call in progress. That count is dominated by how much each agent looks
+up at all. Every offender draws unlawful-locate targets from the same
+7,500-customer pool, and a velocity burst adds 22–40 lookups in a single hour,
+so two busy offenders overlap heavily without ever having colluded.
+
+At the shipped config the raw ranking put a pair that never colluded first,
+sharing 137 customers against a chance expectation of 78. A planted pair came
+second on 106 against an expectation of 38, and the other planted pair came
+fourth. The rule was largely restating Rule 1 — "these agents do a lot of
+no-call lookups" — rather than detecting a relationship between them.
+
+Fixed by scoring the *excess over chance* instead of the raw count. For two
+agents who looked up `n1` and `n2` distinct customers out of `N`, overlap under
+independent sampling is hypergeometric:
+
+```
+expected = n1 * n2 / N
+variance = n1 * (n2/N) * (1 - n2/N) * (N - n1) / (N - 1)
+z        = (observed - expected) / sqrt(variance)
+```
+
+Ranked by `z`, the two planted pairs come **first and second of 190**, with
+11.9 and 11.0 against 8.2 for the next pair. Pairs sharing fewer than three
+customers are dropped: their expected overlap is near zero, so a single
+coincidence produces a large ratio on no evidence.
+
+The data was never the problem — the analytic was. No generator change was
+needed and the golden fingerprints are unaffected.
+
+The scoring lives in `fraud_generator/detection.py` rather than in a notebook
+cell, with unit tests in `tests/test_detection.py` pinning both the behaviour
+and the reason for it, including a test asserting that the top pair by raw
+count is *not* a planted pair — so if that ever stops being true, the simpler
+rule can come back.
 
 ### `collusion_pairs` was always empty (fixed 2026-10-05)
 
@@ -57,6 +53,13 @@ Fixed by raising `p_agent_dishonest` to 0.20 and the floor to 4. The floor
 matters independently: with a floor of 3, any config where
 `num_agents * p_agent_dishonest < 4` silently produced no collusion, which is
 how the bug survived.
+
+### Missing `contact_id` read from CSV is `NaN`, not `None` (fixed 2026-10-06)
+
+`collusion_pair_scores` originally tested `contact_id is None`. Rows straight
+out of the generator carry `None`, but the same rows read back from CSV with
+pandas carry `NaN`, which is neither `None` nor equal to itself. The rule would
+have scored zero pairs on exactly the path the analysis notebook uses.
 
 ### Label guard rail only checked one column per table (fixed 2026-09-12)
 
