@@ -102,7 +102,7 @@ src/fraud_generator/
 pytest
 ```
 
-90 tests, about 10 seconds. Four kinds:
+96 tests, about 18 seconds. Four kinds:
 
 - **Unit** — pure helpers, `Dataset` state, `Config` validation.
 - **Structural** — referential integrity, no activity before an agent's hire date.

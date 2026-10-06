@@ -11,6 +11,9 @@ from fraud_generator.config import Config, ConfigError
         ({"num_customers": 0}, "num_customers"),
         ({"num_customers": -5}, "num_customers"),
         ({"num_agents": 0}, "num_agents"),
+        ({"num_agents": 1}, "at least 4"),
+        ({"num_agents": 2}, "at least 4"),
+        ({"num_agents": 3}, "at least 4"),
         ({"contacts_per_day": 0}, "contacts_per_day"),
         ({"years": 0}, "years"),
         ({"p_self_service": 1.5}, "probability"),
@@ -26,8 +29,14 @@ def test_invalid_config_raises(kwargs, expected_fragment):
     assert expected_fragment in str(exc.value)
 
 
-def test_valid_small_config_is_accepted():
-    cfg = Config(num_customers=10, num_agents=2, years=1, contacts_per_day=1)
+def test_four_agents_is_the_smallest_workable_config():
+    """Regression: fewer than four agents hung build_workforce forever.
+
+    n_bad has a floor of 4 so two collusion pairs can be formed, and the loop
+    that picks offenders draws from range(num_agents) until it has n_bad
+    distinct ones. With three agents it could never get there.
+    """
+    cfg = Config(num_customers=10, num_agents=4, years=1, contacts_per_day=1)
     assert cfg.total_days == 365
     assert len(cfg.date_range) == 365
 

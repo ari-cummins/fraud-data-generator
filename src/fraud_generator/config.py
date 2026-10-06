@@ -15,6 +15,11 @@ class ConfigError(ValueError):
     """Raised when a Config is constructed with values that cannot generate."""
 
 
+#: Four distinct offenders are needed to form the two collusion pairs, and
+#: build_workforce spins forever if it cannot reach that many.
+MIN_AGENTS = 4
+
+
 @dataclass(frozen=True)
 class Config:
     """Parameters for one generation run.
@@ -74,8 +79,16 @@ class Config:
         """Fail at construction rather than halfway through a generation run."""
         if self.num_customers < 1:
             raise ConfigError(f"num_customers must be positive, got {self.num_customers}")
-        if self.num_agents < 1:
-            raise ConfigError(f"num_agents must be positive, got {self.num_agents}")
+        if self.num_agents < MIN_AGENTS:
+            # Not cosmetic: build_workforce loops `while len(dishonest) < n_bad`
+            # drawing from range(num_agents), and n_bad has a floor of 4 so that
+            # two collusion pairs can be formed. With fewer than 4 agents the
+            # set can never reach n_bad and the loop never terminates.
+            raise ConfigError(
+                f"num_agents must be at least {MIN_AGENTS}, got {self.num_agents}: "
+                "the generator plants two collusion pairs, which needs four "
+                "distinct offenders"
+            )
         if self.contacts_per_day < 1:
             raise ConfigError(f"contacts_per_day must be positive, got {self.contacts_per_day}")
         if self.years < 1:

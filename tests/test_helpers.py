@@ -1,7 +1,7 @@
 import pytest
 import re
 
-from fraud_generator import config, helpers, pools
+from fraud_generator import helpers, pools
 from datetime import datetime
 
 def test_seq_id_pads_to_eight_digits():

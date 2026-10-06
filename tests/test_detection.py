@@ -7,7 +7,9 @@ excess over chance, not a raw count.
 
 import pytest
 
+from fraud_generator import config
 from fraud_generator.detection import collusion_pair_scores
+from fraud_generator.engine import generate
 
 
 def _access(agent, customer, contact_id=None):
@@ -16,9 +18,23 @@ def _access(agent, customer, contact_id=None):
 
 # ------------------------------------------------------------------ the real thing
 
+#: Extra seeds checked alongside the default. The property is scale-dependent --
+#: it holds at the shipped 7,500-customer / 3-year config but degrades at
+#: smaller ones, where chance overlap is a larger share of the signal. Verified
+#: over seeds 1-15 at the shipped config; three are kept here so the suite stays
+#: under 30 seconds.
+EXTRA_SEEDS = [1, 7]
+
+
+def _scored(cfg):
+    data, workforce, customers = generate(cfg)
+    scores = collusion_pair_scores(data.crm_access, len(customers.ids))
+    planted = {tuple(sorted(pair)) for pair in workforce.collusion_pairs}
+    return scores, planted
+
 
 def test_planted_pairs_rank_top_at_the_shipped_config(full_dataset):
-    """The property the naive raw-count version of this rule did not have."""
+    """The property the raw shared-count version of this rule does not reliably have."""
     data, workforce, customers, _ = full_dataset
     scores = collusion_pair_scores(data.crm_access, len(customers.ids))
     planted = {tuple(sorted(pair)) for pair in workforce.collusion_pairs}
@@ -30,23 +46,41 @@ def test_planted_pairs_rank_top_at_the_shipped_config(full_dataset):
     )
 
 
+@pytest.mark.parametrize("seed", EXTRA_SEEDS)
+def test_planted_pairs_rank_top_at_other_seeds(seed):
+    """One seed proves nothing. The whole reason this rule was rewritten is that
+    a conclusion had been drawn from a single sample."""
+    scores, planted = _scored(config.Config(seed=seed))
+    top = {s.pair for s in scores[: len(planted)]}
+    assert top == planted, f"seed {seed}: expected {planted} on top, got {top}"
+
+
 def test_a_clear_margin_separates_planted_from_the_rest(full_dataset):
     """Ranking first is not enough if it is first by a hair."""
     data, workforce, customers, _ = full_dataset
     scores = collusion_pair_scores(data.crm_access, len(customers.ids))
     n = len(workforce.collusion_pairs)
-    assert scores[n - 1].z > scores[n].z * 1.2, (
-        f"planted pairs scored {scores[n - 1].z:.2f}, next best {scores[n].z:.2f} "
-        "- too close to call collusion apart from coincidence"
+    margin = scores[n - 1].z - scores[n].z
+    assert margin > 1.0, (
+        f"lowest planted pair scored {scores[n - 1].z:.2f}, next best "
+        f"{scores[n].z:.2f} (margin {margin:.2f}) - too close to call collusion "
+        "apart from coincidence"
     )
 
 
-def test_raw_count_alone_would_not_have_worked(full_dataset):
-    """Why the rule changed, pinned as a test.
+def test_raw_count_misranks_at_the_default_seed(full_dataset):
+    """Pins the specific case that exposed the problem.
 
-    The pair with the highest raw shared-customer count is not a planted pair.
-    If this ever stops being true the normalisation is no longer earning its
-    keep and the simpler rule could come back.
+    Honest framing, because the first version of this test overstated it: the
+    raw shared-customer count gets the top pair RIGHT in roughly 14 of 15 seeds.
+    Seed 42 -- the shipped default -- is one where it does not, putting a pair
+    that never colluded first on 137 shared against an expectation of 78.
+
+    So the raw rule is not useless, it is unreliable in a way that depends on
+    which agents happen to be busy. That is the argument for normalising, and
+    this test keeps the concrete counter-example from quietly evaporating. If it
+    starts failing, the generator changed and the example needs re-checking --
+    not that the simpler rule became correct.
     """
     data, workforce, customers, _ = full_dataset
     scores = collusion_pair_scores(data.crm_access, len(customers.ids))
