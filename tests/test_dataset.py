@@ -11,7 +11,7 @@ how the collusion bug survived undetected.
 """
 
 import statistics
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 
 
@@ -69,6 +69,17 @@ def test_contacts_are_inside_the_generation_window(small_dataset):
     for row in data.contacts:
         ts = _parse(row["contact_timestamp"])
         assert first <= ts <= last.replace(hour=23, minute=59, second=59)
+
+
+def test_profile_changes_natural_key_is_unique(full_dataset):
+    """Grain: one row is one field changed in one change event for one customer."""
+    data, _, _, _ = full_dataset
+    keys = Counter(
+        (row["change_timestamp"], row["customer_id"], row["field_changed"])
+        for row in data.profile_changes
+    )
+    dupes = {key: n for key, n in keys.items() if n > 1}
+    assert not dupes, f"{len(dupes)} natural keys repeat, e.g. {list(dupes.items())[:3]}"
 
 
 # --------------------------------------------------------------------- scenarios
